@@ -60,10 +60,11 @@ for i = 1:num_layers
         p.EdgeColor = 'none';
         hold on;
         p2 = plot3(layer_surf.vertices(min_index,1),layer_surf.vertices(min_index,2),...
-            layer_surf.vertices(min_index,3)+1,'o','Color',[0.87 1 0], 'MarkerSize', 9, 'LineWidth',2);
+            layer_surf.vertices(min_index,3)+3,'o','Color',[0.87 1 0], 'MarkerSize', 9, 'LineWidth',2);
         disp(min_thresh)
-        lgd=legend(p2,'Minimum Threshold');
+        lgd=legend(p2,'Minimum threshold');
         lgd.FontSize = 14;
+        lgd.Interpreter = 'latex';
     else
         fprintf('No cells in layer\n');
     end
@@ -79,8 +80,9 @@ lightangle(h,-50,30);
 hcb = colorbar;
 hcb.Position = [0.0994,0.371,0.0128,0.315];
 % add colorbar title
-hcb.Label.String = 'Median threshold (A/\mus)';
+hcb.Label.String = 'Median threshold (A/$$\mu$$s)';
 hcb.Label.FontSize = 14;
+hcb.Label.Interpreter = 'latex';
 
 axis equal; axis tight; 
 axis off; 
