@@ -11,13 +11,14 @@ mat_dir = addPaths;
 nrn_model_ver = 'maxH';
 mode = 1; % monophasic MagProX100 pulse
 layer_set_num = 1;
-Efield_name = 'M1_PA_MCB70'; 
+Efield_name = 'M1_PA_MCB70_zrot'; 
 cell_ids = {1:5;6:10;11:15;16:20;21:25};  
-nrn_pop = 'nrn_pop1-nrn_pop6_all'; 
+%nrn_pop = 'nrn_pop1-nrn_pop6_all'; 
+nrn_pop = 'nrn_pop1';
 model_prefix = sprintf('tms_%s_w%g_ls_%g_E_%s_P_%s',nrn_model_ver,mode,...
                             layer_set_num,Efield_name,nrn_pop); 
 %% Plot settings
-fig_size = [17 8.5]; % cm 
+%fig_size = [20 12]; % cm 
 font_size = 8; 
 text_fontsize = 9; 
 font_name = 'Times';
@@ -78,8 +79,8 @@ end
 %% Plot
 fig = figure('Color','w'); 
 fig.Units = 'centimeters';
-fig.Position(1:2) = [2 13.41]; 
-fig.Position(3:4) = fig_size; 
+% fig.Position(1:2) = [2 13.41]; 
+% fig.Position(3:4) = fig_size; 
 xstart = 0.06; 
 axwidth = 0.7/num_layers; 
 axxgap = (0.95-axwidth*num_layers)/5;
