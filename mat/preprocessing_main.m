@@ -31,9 +31,11 @@ s.poslist{1}.cond(3).value = 1.79; % CSF
 s.poslist{1}.cond(4).value = 0.01; % bone
 s.poslist{1}.cond(5).value = 0.25; % scalp
 
-%% Initialize anisotropic white matter conductivity
+%% Initialize anisotropic WM and GM conductivity if DTI available
 
-s.poslist{1}.anisotropy_type = 'vn';
+if exist(fullfile(mat_dir,'/preprocessing/head_mesh/d2c_subject_1'),'dir') > 0
+    s.poslist{1}.anisotropy_type = 'vn'; 
+end
 
 %% get coil location
 
