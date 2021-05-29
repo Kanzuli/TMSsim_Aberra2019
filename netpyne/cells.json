@@ -1,0 +1,106 @@
+[
+        {
+            "label": "L1_NGC-DA_bNAC219_1",
+            "cell_name": "bNAC219_L1_NGCDA_095997ce92"
+        },
+        {
+            "label": "L1_NGC-DA_bNAC219_2",
+            "cell_name": "bNAC219_L1_NGCDA_e7cec642c3"
+        },
+        {
+            "label": "L1_NGC-DA_bNAC219_3",
+            "cell_name": "bNAC219_L1_NGCDA_46b45974f4"
+        },
+        {
+            "label": "L1_NGC-DA_bNAC219_4",
+            "cell_name": "bNAC219_L1_NGCDA_b030a58a66"
+        },
+        {
+            "label": "L1_NGC-DA_bNAC219_5",
+            "cell_name": "bNAC219_L1_NGCDA_3d9c976fde"
+        },
+
+        {
+            "label": "L23_PC_cADpyr229_1",
+            "cell_name": "cADpyr229_L23_PC_5ecbf9b163"
+        },
+        {
+            "label": "L23_PC_cADpyr229_2",
+            "cell_name": "cADpyr229_L23_PC_8ef1aa6602"
+        },
+        {
+            "label": "L23_PC_cADpyr229_3",
+            "cell_name": "cADpyr229_L23_PC_863902f300"
+        },
+        {
+            "label": "L23_PC_cADpyr229_4",
+            "cell_name": "cADpyr229_L23_PC_c292d67a2e"
+        },
+        {
+            "label": "L23_PC_cADpyr229_5",
+            "cell_name": "cADpyr229_L23_PC_c2e79db05a"
+        },
+
+        {
+            "label": "L4_LBC_cACint209_1",
+            "cell_name": "cACint209_L4_LBC_baa757490e"
+        },
+        {
+            "label": "L4_LBC_cACint209_2",
+            "cell_name": "cACint209_L4_LBC_66ec8fed8f"
+        },
+        {
+            "label": "L4_LBC_cACint209_3",
+            "cell_name": "cACint209_L4_LBC_db543bcdea"
+        },
+        {
+            "label": "L4_LBC_cACint209_4",
+            "cell_name": "cACint209_L4_LBC_45f62e2816"
+        },
+        {
+            "label": "L4_LBC_cACint209_5",
+            "cell_name": "cACint209_L4_LBC_852c3c018f"
+        },
+
+        {
+            "label": "L5_TTPC2_cADpyr232_1",
+            "cell_name": "cADpyr232_L5_TTPC2_8052133265"
+        },
+        {
+            "label": "L5_TTPC2_cADpyr232_2",
+            "cell_name": "cADpyr232_L5_TTPC2_a28017c6c7"
+        },
+        {
+            "label": "L5_TTPC2_cADpyr232_3",
+            "cell_name": "cADpyr232_L5_TTPC2_a467781f53"
+        },
+        {
+            "label": "L5_TTPC2_cADpyr232_4",
+            "cell_name": "cADpyr232_L5_TTPC2_c46a93702c"
+        },
+        {
+            "label": "L5_TTPC2_cADpyr232_5",
+            "cell_name": "cADpyr232_L5_TTPC2_8bab918b58"
+        },
+
+        {
+            "label": "L6_TPC_L4_cADpyr231_1",
+            "cell_name": "cADpyr231_L6_TPC_L4_3f1b0bd478"
+        },
+        {
+            "label": "L6_TPC_L4_cADpyr231_2",
+            "cell_name": "cADpyr231_L6_TPC_L4_0cb1e9aa6b"
+        },
+        {
+            "label": "L6_TPC_L4_cADpyr231_3",
+            "cell_name": "cADpyr231_L6_TPC_L4_184fd5677b"
+        },
+        {
+            "label": "L6_TPC_L4_cADpyr231_4",
+            "cell_name": "cADpyr231_L6_TPC_L4_117b9dfb71"
+        },
+        {
+            "label": "L6_TPC_L4_cADpyr231_5",
+            "cell_name": "cADpyr231_L6_TPC_L4_91b667d362"
+        }
+    ]
