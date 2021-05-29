@@ -1,3 +1,13 @@
+# README for Preprocessing
+
+Produces required inputs for TMS simulation by Aberra et al. 2019 (see below) from brain MRI and TMS coil orientation
+
+
+
+
+
+
+
 # README for TMSsim_Aberra2019
 
 Simulation code for Aberra, A., Wang, B., Grill, W. M., and Peterchev, A. V. (2019). Simulation of transcranial magnetic stimulation in head model with morphologically-realistic cortical neurons. Brain Stimul. In press.
