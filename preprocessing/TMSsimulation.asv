@@ -1,0 +1,858 @@
+%% RUN SIMNIBS SIMULATION
+%addpath(genpath('C:\Users\matil\Google Drive\Kandi\LST-projekti\Code\Power-Crust-MATLAB-master'))
+pathi = addpath(genpath('../TMSsim_Aberra2019/'));
+addpath('C:\Users\<USER_NAME>\AppData\Local\SimNIBS\matlab')
+
+%% Make SimNIBS simulation
+
+% Initialize a session
+s = sim_struct('SESSION');
+
+% Name of head mesh
+s.fnamehead = 'subject_1.msh';
+
+% Output folder
+s.pathfem = fullfile(pathi,'../preprocesing/simulation_mesh/');
+
+% Initialize a list of TMS simulations
+s.poslist{1} = sim_struct('TMSLIST');
+% Select coil
+s.poslist{1}.fnamecoil = 'Magstim_70mm_Fig8.nii.gz';
+%s.poslist{1}.fnamecoil = 'MagVenture_MC_B70.nii.gz';
+
+%% Initialize isotropic conductivities
+
+%s.poslist{1}.cond(1).value = 0.126; % white matter
+s.poslist{1}.cond(2).value = 0.276; % grey matter
+s.poslist{1}.cond(3).value = 1.79; % CSF
+s.poslist{1}.cond(4).value = 0.01; % bone
+s.poslist{1}.cond(5).value = 0.25; % scalp
+
+%% Initialize anisotropic white matter conductivity
+
+s.poslist{1}.anisotropy_type = 'vn';
+s.poslist{1}.aniso_maxratio = 10; % default, Maximum ratio between minimum an maximum eigenvalue in conductivity tensors
+s.poslist{1}.aniso_maxcond = 2; % default, Maximum mean conductivity value
+
+%% get coil location
+
+% Select coil centre
+% s.poslist{1}.pos(1).centre = 'C3';
+% Select coil direction
+% s.poslist{1}.pos(1).pos_ydir = 'CP1';
+
+% TODO: get transformation matrix directly from Python Nexstim code
+% transformation_matrix = [0.65925728,0.36654839,-0.65654076,-45.19342024;...
+%  -0.57936733,0.80417602,-0.13283416,-28.8838479;...
+%  0.47928419,0.46791367,0.74250207,81.39023078;...
+%  0.,0.,0.,1.]; % from Victor's coordinate transforming code
+ 
+% s.poslist{1}.pos(1).matsimnibs = transformation_matrix;
+
+% Joonas' physiological coordinates
+s.poslist{1}.pos(1).centre = [-45.1934, -28.8838, 81.3902];
+% Select coil direction
+s.poslist{1}.pos(1).pos_ydir = 'FC1';
+
+% Set coil distance from scalp as in Aberra paper
+s.poslist{1}.pos(1).distance = 2; 
+%s.poslist{1}.pos(1).didt = 1e6;
+
+%% Run the simulation, takes 10-15 minutes
+
+run_simnibs(s)
+
+%% Analysis
+% Read simulation results (anisotropic conductivities in GM and WM)
+head_mesh = mesh_load_gmsh4(fullfile('C:\Users\matil\Google Drive\Kandi\LST-projekti\Code\subject_1.msh'));
+simulation_mesh = mesh_load_gmsh4(fullfile('C:\Users\matil\Google Drive\Kandi\LST-projekti\Code\simnibs_manual_scalar\subject_1_TMS_1-0001_Magstim_70mm_Fig8_nii_vn.msh'));
+
+% get isotropic simulation
+%simulation_mesh = mesh_load_gmsh4(fullfile('C:\Users\matil\Google Drive\Kandi\LST-projekti\Code\simnibs_isotropic\subject_1_TMS_1-0001_Magstim_70mm_Fig8_nii_scalar.msh'));
+%simulation_mesh = mesh_load_gmsh4(fullfile('C:\Users\matil\Google Drive\Kandi\LST-projekti\Code\simnibs_simulation\subject_1_TMS_1-0001_Magstim_70mm_Fig8_nii_vn.msh'));
+
+% ernie
+%simulation_mesh = mesh_load_gmsh4(fullfile('C:\Users\matil\Google Drive\Kandi\LST-projekti\Code\simnibs_simulation\ernie_TMS_1-0001_Magstim_70mm_Fig8_nii_scalar.msh'));
+
+%%
+% Extract GM & WM
+gray_matter = mesh_extract_regions(head_mesh,'region_idx', 2);
+white_matter = mesh_extract_regions(head_mesh,'region_idx', 1);
+
+% Extract gray and white matter surfaces from head model
+gray_matter_surf = mesh_extract_regions(head_mesh,'region_idx', 1002);
+white_matter_surf = mesh_extract_regions(head_mesh,'region_idx', 1001);
+
+% Extract GM & WM (simulation) IF NEEDED
+% gray_matter_sim = mesh_extract_regions(simulation_mesh, 'region_idx', 2);
+% white_matter_sim = mesh_extract_regions(simulation_mesh, 'region_idx', 1);
+
+%% Make E-field data array as in Aberra code
+
+% "The E-field at the model neuron compartments was linearly interpolated from the 10 nearest
+% mesh points (tetrahedral vertices in SimNIBS) within the gray and
+% white matter volumes using the MATLAB scatteredInterpolant function." 
+% - done in function interpEfield 
+
+% Np x 6 matrix where Np is the number of FEM elements in the head model 
+% and each row is [x y z Ex Ey Ez]: 
+% the coordinates of the center of each tetrahedral FEM element, 
+% followed by the directional magnitudes of the E-field vector in that FEM element.
+
+% the last 3 columns (E-field magnitudes) we can get from
+Efield_solution(:,4:6) = simulation_mesh.element_data{1, 1}.tetdata;
+
+% calculating the tetrahedra midpoints with function Tetra_Midpoints
+midpoints = Tetra_Midpoints(simulation_mesh.nodes,simulation_mesh.tetrahedra);
+Efield_solution(:,1:3) = midpoints;
+
+%% choose ROI graphically IF NEEDED AGAIN
+% in ROI choosing tool: mesh.p = nodes, mesh.e = elements 
+%inds = [];
+inds = idx;
+
+% centerpoint of TMS coil as reference point;
+% TODO: import dirctly from Python Nexstim code
+ref_point = [-45.2, -28.9, 81.4];
+
+% choose points graphically with Tuomas' function
+inds = select_sources_from_surface(gray_matter_surf, 10, 5, inds, ref_point);
+
+% save indices
+save('ROI_indices','inds');
+
+%% Extract ROI from inds and make MeshROI, TAKES A FEW MINUTES!
+
+% load ROI indices(name needs to be 'inds')
+load('ROI_indices.mat');
+
+MeshROI_our = makeMeshROI(inds, gray_matter_surf, white_matter_surf);
+
+%% Construct layers TAKES A FEW MINUTES!
+
+% Aberra et al 2020: "To generate layer-specific populations of neurons, surface
+% meshes representing the cortical layers were interpolated between
+% the gray and white matter surface meshes at normalized depths"
+
+% copy basic information from from Aberra file
+% mat/output_data/layer_data/layer_set_1
+layers_our = struct('depth',{0.06,0.4,0.55,0.65,0.85},'num_elem',{3000,2999,3000,2999,2999});
+
+% call function to make the layers struct
+% 1 means choosing num_elem elements from each layer
+[layers_our, B] = makeLayers(MeshROI_our, layers_our, 1);
+
+%% Construct layersP struct TAKES A FEW MINUTES!
+
+layersP = struct('depth',{0.06,0.08,0.4,0.51,0.55,0.59,0.65,0.81,0.85});
+
+% 0 means keeping all elements from the mesh
+layersP = makeLayers(MeshROI_our, layersP, 0);
+
+%% Create layers_E struct TAKES AN HOUR OR SO!!!
+
+% E is from Efield_solution
+% 4 is the number of closest E-field points used for interpolation
+% 0 is to not go through all layers, only one layer (for testing)
+layersE = makeLayersE(layers,E,10,0);
+
+%% Unify layer normals after done with the old makeLayers function (for first runs only)
+
+% use B obtained from makeLayers function
+B = [-28.133509709540892,-24.444278969914738,58.124777161925174];
+layersE = unifyNormalsLater(layersE, B);
+
+%% functions
+
+function [inds] = select_sources_from_surface(mesh,radius1,radius2,inds,reference_points)
+
+% This functions allows to click and select sources from the cortical mesh
+% surface
+
+% Tuomas Mutanen, 2019
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+% input:
+%
+% sa = the head model
+% radius1 = the radius used to picking up the sources of interest
+% radius2 = optional, the radius used to deleting the extra sources of interest
+% ind = optional, already previously defined indices to enable to continue
+% from the previously saved point
+% reference_points = Anatomical landmarks in MNI coordinates to help to identify ROIs
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+if nargin < 3
+    radius2 = radius1;
+end
+
+if nargin < 4
+    inds = [];
+end
+
+if nargin < 5
+    reference_points = [];
+end
+
+% Reading the cortical surface from the average head
+
+%cortex.vc = mesh.p;
+cortex.vc = mesh.nodes;
+
+%cortex.tri = mesh.e;
+cortex.tri = mesh.triangles;
+
+tri_midpoint = Tri_Midpoints(cortex.vc, cortex.tri);
+
+N_cortex_points = length(cortex.tri);
+
+% Implementing the visualization and the GUI
+
+    fig = figure(999);
+    
+    plot_vec = zeros(1,N_cortex_points);
+    plot_vec(inds) = 1;
+    
+    h = trisurf(cortex.tri, cortex.vc(:,1), cortex.vc(:,2), cortex.vc(:,3),plot_vec,'EdgeAlpha',0);
+    grid off;
+    axis off;
+    caxis([-1 1])
+    view([0, 90]);
+    colormap('jet')
+    colorbar;   
+    lightangle(90,-90)
+     h.FaceLighting = 'gouraud';
+    h.AmbientStrength = 0.5;
+    h.DiffuseStrength = 0.9;
+    h.SpecularStrength = 0.2;
+    h.SpecularExponent = 50;
+    h.BackFaceLighting = 'unlit';
+    [az,el] = view;
+    
+    if ~isempty(reference_points)
+    hold on; 
+    plot3(reference_points(:,1),reference_points(:,2),reference_points(:,3),'k.','MarkerSize',40)
+    hold off;
+    end 
+
+continue_choosing = 1;
+
+while continue_choosing
+
+    figure(999);
+    plot_vec(inds) = 1;
+    h = trisurf(cortex.tri, cortex.vc(:,1), cortex.vc(:,2), cortex.vc(:,3),plot_vec,'EdgeAlpha',0);
+    grid off;
+    axis off;
+    caxis([-1 1])
+    view([0, 90]);
+    colormap('jet')
+    colorbar;   
+    lightangle(90,-90)
+     h.FaceLighting = 'gouraud';
+    h.AmbientStrength = 0.5;
+    h.DiffuseStrength = 0.9;
+    h.SpecularStrength = 0.2;
+    h.SpecularExponent = 50;
+    h.BackFaceLighting = 'unlit';
+    view(az,el)
+    
+    if ~isempty(reference_points)
+    hold on; 
+    plot3(reference_points(:,1),reference_points(:,2),reference_points(:,3),'k.','MarkerSize',40)
+    hold off;
+    end 
+    
+    datacursormode on;
+
+    title('Choose a point reflecting ROI, press a KEY to SAVE the point')
+    pause();
+    dcm_obj = datacursormode(fig);
+    c_info = getCursorInfo(dcm_obj);
+    try
+        current_indx = find(sqrt(sum((tri_midpoint - repmat(c_info.Position, [N_cortex_points, 1])).^2,2)) < radius1);
+        inds = [inds; current_indx];
+    catch
+        break;
+    end
+
+    title('Press any KEY to CONTINUE, CLICK to END selecting ROI points')
+    continue_choosing = waitforbuttonpress;
+    [az,el] = view;
+
+end
+
+continue_choosing = 1;
+
+while continue_choosing
+
+    figure(999);
+    plot_vec = zeros(1,N_cortex_points);
+    plot_vec(inds) = 1;
+    h = trisurf(cortex.tri, cortex.vc(:,1), cortex.vc(:,2), cortex.vc(:,3),plot_vec,'EdgeAlpha',0);
+    grid off;
+    axis off;
+    caxis([-1 1])
+    view([0, 90]);
+    colormap('jet')
+    colorbar;   
+    lightangle(90,-90)
+     h.FaceLighting = 'gouraud';
+    h.AmbientStrength = 0.5;
+    h.DiffuseStrength = 0.9;
+    h.SpecularStrength = 0.2;
+    h.SpecularExponent = 50;
+    h.BackFaceLighting = 'unlit';
+    view(az,el);
+    
+    if ~isempty(reference_points)
+    hold on; 
+    plot3(reference_points(:,1),reference_points(:,2),reference_points(:,3),'k.','MarkerSize',40)
+    hold off;
+    end 
+    datacursormode on;
+
+    title('Trim accidental extra points, press a KEY to DELETE the point')
+    pause();
+    dcm_obj = datacursormode(fig);
+    c_info = getCursorInfo(dcm_obj);
+    try
+        current_indx = find(sqrt(sum((tri_midpoint - repmat(c_info.Position, [N_cortex_points, 1])).^2,2)) < radius2);
+        inds = setdiff(inds, current_indx);
+    catch
+        break;
+    end
+
+    title('Press any KEY to CONTINUE, CLICK to END deleting ROI points')
+    continue_choosing = waitforbuttonpress;
+    [az,el] = view; 
+    
+end
+
+end
+
+function midpoints=Tri_Midpoints(nodes,elements)
+% function midpoints=TriangleMidpoints(nodes,elements)
+% Calculates midpoints (centroids = centers of mass) of the mesh triangles.
+
+p1=nodes(elements(:,1),:);
+p2=nodes(elements(:,2),:);
+p3=nodes(elements(:,3),:);
+midpoints=(p1+p2+p3)/3;
+    
+end
+
+function midpoints=Tetra_Midpoints(nodes,elements)
+% Calculates midpoints (centroids = centers of mass) of the mesh tetrahedra.
+
+p1=nodes(elements(:,1),:);
+p2=nodes(elements(:,2),:);
+p3=nodes(elements(:,3),:);
+p4=nodes(elements(:,4),:);
+midpoints=(p1+p2+p3+p4)/4;
+    
+end
+
+function varargout = clipPoints3d(points, box)
+%CLIPPOINTS3D Clip a set of points by a box
+%
+%   CLIP = clipPoints3d(POINTS, BOX);
+%   Returns the set of points which are located inside of the box BOX.
+%
+%   [CLIP IND] = clipPoints2d(POINTS, BOX);
+%   Also returns the indices of clipepd points.
+%
+%   See also
+%   points3d, boxes3d
+%
+%
+% ------
+% Author: David Legland
+% e-mail: david.legland@nantes.inra.fr
+% Created: 2008-10-13,    using Matlab 7.4.0.287 (R2007a)
+% Copyright 2008 INRA - BIA PV Nantes - MIAJ Jouy-en-Josas.
+
+% get bounding box limits
+xmin = box(1);
+xmax = box(2);
+ymin = box(3);
+ymax = box(4);
+zmin = box(5);
+zmax = box(6);
+
+% compute indices of points inside visible area
+xOk = points(:,1) >= xmin & points(:,1) <= xmax;
+yOk = points(:,2) >= ymin & points(:,2) <= ymax;
+zOk = points(:,3) >= zmin & points(:,3) <= zmax;
+
+% keep only points inside box
+ind = find(xOk & yOk & zOk);
+points = points(ind, :);
+
+% process output arguments
+varargout{1} = points;
+if nargout == 2
+    varargout{2} = ind;
+end
+end
+
+function [area,maxside] = Tri_Area(ind, tris, nodes)
+    % getting point coordinates
+    p1=nodes(tris(ind,1),:);
+    p2=nodes(tris(ind,2),:);
+    p3=nodes(tris(ind,3),:);
+    
+    % lengths of triangle sides
+    a = norm(p1-p2);
+    b = norm(p1-p3);
+    c = norm(p3-p2);
+    
+    % maximum side length
+    maxside = max([a b c]);
+
+    s = (a+b+c)./2;
+    area = sqrt(s.*(s-a).*(s-b).*(s-c));
+end
+
+function MeshROI_our = makeMeshROI(inds,gray_matter_surf, white_matter_surf)
+    
+    tris = gray_matter_surf.triangles(inds,:); % take triangle rows corresponding to indices
+    tris2 = tris(:); % concatenate columns of triangle rows: get node indices
+    tris3= sort(tris2);
+    tris4 = unique(tris3); % remove duplicate node indices (those shared between triangles)
+    nodes = gray_matter_surf.nodes(tris4,:); % extract the nodes corresponding to said indices
+
+    % extract ROI box as the minimum and maximum node coordinates in each direction
+    MeshROI_our.ROI = [min(nodes(:,1)) max(nodes(:,1)) min(nodes(:,2)) max(nodes(:,2)) min(nodes(:,3)) max(nodes(:,3))];
+    % Cut off weird slab disconnected from rest of ROI by hard coding
+    MeshROI_our.ROI(2) = -15;
+       
+    % get all nodes of surface inside ROI
+    MeshROI_our.GrayMatter = clipPoints3d(gray_matter_surf.nodes,MeshROI_our.ROI);
+    MeshROI_our.WhiteMatter = clipPoints3d(white_matter_surf.nodes,MeshROI_our.ROI);
+
+    % add same nodes to surface structure
+    MeshROI_our.surfaces.GrayMatter.vertices = MeshROI_our.GrayMatter;
+    MeshROI_our.surfaces.WhiteMatter.vertices = MeshROI_our.WhiteMatter;
+
+    % Produce triangles in surface structures 
+
+    % GRAY MATTER
+    MeshROI_our.surfaces.GrayMatter.faces = makeROITriangles(gray_matter_surf,MeshROI_our.GrayMatter);
+
+    % WHITE MATTER
+    MeshROI_our.surfaces.WhiteMatter.faces = makeROITriangles(white_matter_surf,MeshROI_our.WhiteMatter);
+
+end
+
+function ROItriangles2 = makeROITriangles(surf, matter)
+    
+    % get indices of nodes in ROI
+    [~,LocResults,~] = intersect(surf.nodes,matter,'rows');
+
+    % get those triangles that are in ROI (all three points must be in ROI nodes)
+    % = keep row, if all elements in the row belong to LocResult
+
+    idx = [];
+    for i = 1:size(surf.triangles, 1)
+        if ismember(surf.triangles(i,1), LocResults)
+            if ismember(surf.triangles(i,2), LocResults)
+                if ismember(surf.triangles(i,3), LocResults)
+                    idx(end+1) = i;
+                end
+            end
+        end
+    end
+
+    ROItriangles = surf.triangles(idx,:);
+
+    % remove nodes that are not faces of any triangle
+    % TODO, also change indices of triangles
+%     connectedFaces = find(any(faces==nearestVertexID,2));
+%     assert(length(connectedFaces)>=1,'Vertex %u is not connected to any face.',nearestVertexID)
+    
+    
+    % convert three points of triangles into MeshROI index system
+
+    ROItriangles2 = zeros(size(ROItriangles));
+
+    for i = 1:size(ROItriangles,1)
+        for j = 1:3
+            original_index = ROItriangles(i,j);
+            point = surf.nodes(original_index,:);
+            [~,new_index,~] = intersect(matter,point,'rows');
+            ROItriangles2(i,j) = new_index;       
+        end
+    end
+end
+
+function layersE = makeLayersE(layers_our,E,num_points,all_layers)
+    
+    % initializing fields for layersE struct
+    layersE = layers_our;
+    interpnames = cellstr(['N/A']);
+    [layersE(:).interp_name] = deal(interpnames{:});
+    efieldnames = cellstr(['M1_PA_MCB70']);
+    [layersE(:).Efield_solution] = deal(efieldnames{:});
+
+    % adding cell origin coordinates as the basis for e-field structures
+    [layersE(:).Efield] = layers_our.cell_origins;
+    [layersE(:).EfieldLoc] = layers_our.cell_origins;
+
+    % adding e-field info to Efield structure by interpolating
+    % this part of code is largely from Aberra's function 'interpEfield'
+
+    Epts = E(:,1:3);
+    Evec = E(:,4:6);
+    Emag = sqrt(Evec(:,1).^2+Evec(:,2).^2+Evec(:,3).^2);
+    % remove outliers
+    Epts = Epts(Emag < 450,:); % extract points below 450 V/m
+    Evec = Evec(Emag < 450,:); 
+    % remove duplicate points
+    [Epts,uinds,~] = unique(Epts,'rows');
+    Evec = Evec(uinds,:);
+    
+    if all_layers
+        depths = {layers_our.depth};
+        num_layers = size(depths,2);
+    else
+        num_layers = 1;
+    end
+
+    % loop through all layers and cell origins
+    for i = 1:num_layers
+        %numPositions = layers_our(i).num_elem; 
+        numPositions = 5;
+        Efi = cell(numPositions,1);
+        Eloc = cell(numPositions,1);
+        parfor k = 1:numPositions
+            disp(k)
+            Cij = layers_our(i).cell_origins(k,:); % get coordinates of all compartments for kth cell (in mm)
+            inds = knnsearch(Epts,Cij,'k',num_points); % find 4 nearest points in E
+            unique_inds = unique(inds); % extract unique points
+            pts_near_Cij = Epts(unique_inds,:); % extract coordinates
+            E_near_i = Evec(unique_inds,:);
+            % make scattered interpolants for each component of E
+            Ex_int = scatteredInterpolant(pts_near_Cij(:,1),pts_near_Cij(:,2),pts_near_Cij(:,3),E_near_i(:,1),'linear');
+            Ey_int = scatteredInterpolant(pts_near_Cij(:,1),pts_near_Cij(:,2),pts_near_Cij(:,3),E_near_i(:,2),'linear');
+            Ez_int = scatteredInterpolant(pts_near_Cij(:,1),pts_near_Cij(:,2),pts_near_Cij(:,3),E_near_i(:,3),'linear');
+
+            Eint = [Ex_int(Cij(:,1),Cij(:,2),Cij(:,3)),...
+                Ey_int(Cij(:,1),Cij(:,2),Cij(:,3)),...
+                Ez_int(Cij(:,1),Cij(:,2),Cij(:,3))]; % get interpolated field components
+            if size(Eint) ~= size(Cij)
+                error('E-field has different number of elements from cell-coordinates');
+            end
+            
+            % make 4th column of EfieldLoc (Efield magnitude)
+            eloc = sqrt(Eint(:,1).^2+Eint(:,2).^2+Eint(:,3).^2);
+            
+            % Add to full array of Efield vectors
+            Efi{k} = Eint;
+            Eloc{k} = eloc;
+        end
+        for m = 1:numPositions
+            [layersE(i).Efield(m,4:6)] = Efi{m};
+            % make 4th column of EfieldLoc (Efield magnitude)
+            [layersE(i).EfieldLoc(m,4)] = Eloc{m};
+        end
+    end
+end
+
+function [layers_our, B] = makeLayers(MeshROI_our, layers_our, choose_elements)
+
+    % initialize fields
+    surfacestructs = struct('faces',[],'vertices',[]);
+    [layers_our(:).surface] = deal(surfacestructs);
+
+    layersetnames = cellstr(['layer_set_1']);
+    [layers_our(:).layer_set_name] = deal(layersetnames{:});
+
+    layersets = 1;
+    [layers_our(:).layer_set] = deal(layersets);
+
+    % initialize other fields with ones (these will be filled later)
+    [layers_our(:).vnormals] = deal(layersets);
+    [layers_our(:).cell_normals] = deal(layersets);
+    [layers_our(:).cell_origins] = deal(layersets);
+
+
+    % number of layers
+    depths = {layers_our.depth};
+    no_of_layers = size(depths,2);
+
+    % Get thickness of GM 
+    % start with the surface layer MeshROI_our.GrayMatter, and project downwards
+    % to each layer by finding the normals of triangular FEM elements
+
+    % get normals of each triangular surface element
+    TR = triangulation(MeshROI_our.surfaces.GrayMatter.faces,MeshROI_our.surfaces.GrayMatter.vertices);
+    V = faceNormal(TR);
+    V = -V; % making the normals point inwards
+
+    % find thickness of gray matter layer at each point by calculating the
+    % length of the normal until it meets the white matter surface
+    tri_midpoints = incenter(TR);
+    [distances,~] = point2trimesh(MeshROI_our.surfaces.WhiteMatter, 'QueryPoints', tri_midpoints);
+
+    % Create new layer meshes
+    for i = 1:no_of_layers
+        
+        % Project along normals to form layers with relative depths
+        
+        % Adjust the length of the unit vector to specific layer depths
+        % vectors = relative distance x total distance x unit vector and calculate 
+        % end points of the stretched vectors = points of the new layer mesh
+        
+        layer_vectors = layers_our(i).depth .* distances .* V;        
+        layer_mesh_points = tri_midpoints + layer_vectors;
+        
+        % Find point B from which all normals should point outwards from
+        % This is for unifying the normal directions later       
+        layer_vectors_B = 10 .* distances .* V;        
+        layer_mesh_points_B = tri_midpoints + layer_vectors_B;       
+        B = mean(layer_mesh_points_B);
+        
+        % make mesh of new layer points
+        layers_our(i).surface.faces = MyCrustOpen(layer_mesh_points);
+        layers_our(i).surface.vertices = layer_mesh_points;
+        
+        if choose_elements
+            % Take 3000/2999 elements for each layer surface
+            % also perform rejection based on too large area of triangular element
+
+            numelements = layers_our(i).num_elem;
+                     
+            [layers_our(i).surface.faces,layers_our(i).surface.vertices]...
+                = reducepatch(layers_our(i).surface.faces,layers_our(i).surface.vertices,numelements);
+                         
+        else % write actual number of elements if no specific amount is chosen
+            faces_for_number = layers_our(i).surface.faces;
+            layers_our(i).num_elem = size(faces_for_number,1);
+        end
+
+
+        % Calculate vnormals, cell_normals and cell_origins
+
+        % calculate normals of each vertex
+        faces2double = layers_our(i).surface.faces;
+        TR = triangulation(double(faces2double), layers_our(i).surface.vertices);
+        layers_our(i).vnormals = vertexNormal(TR);
+
+        % calculate cell_normals of each projected element in each layer
+        % "the model neurons were oriented to align their
+        % somatodendritic axes with the element normals" - thus normals needed
+        layers_our(i).cell_normals = faceNormal(TR);
+        
+        % calculate cell_origins (apparently midpoints of elements?)
+        layers_our(i).cell_origins = incenter(TR);
+        
+        % Unify direction of normals
+        
+        % "Say you set up a point B in the middle of the volume. 
+        % Suppose dface is the displacement vector from 
+        % B to the middle of a face. The the dot product of dface with an 
+        % outward face normal should be positive."
+        
+        % calculating dface vector with previously determined point B
+        dface = layers_our(i).cell_origins - B;
+        
+        sdot = sign(dot(dface,layers_our(i).cell_normals,3));       
+        % ^ want these all to be positive
+        layers_our(i).cell_normals = layers_our(i).cell_normals.*sdot;
+       
+        % plot layer meshes
+        figure(i);
+        nodes = layers_our(i).surface.vertices;
+        trisurf(layers_our(i).surface.faces,nodes(:,1),nodes(:,2),nodes(:,3),'facecolor','c','edgecolor','k');
+        % Plot cell_normals if needed
+        hold on;         
+
+        P = layers_our(i).cell_origins;
+        F = layers_our(i).cell_normals;
+        quiver3(P(:,1),P(:,2),P(:,3), F(:,1),F(:,2),F(:,3),0.5,'color','r');
+    end
+end
+
+% old functions
+% chooses 3000 small elements randomly
+function layers_our = makeLayers_old(MeshROI_our, layers_our, choose_elements)
+    
+    % initialize fields
+    surfacestructs = struct('faces',[],'vertices',[]);
+    [layers_our(:).surface] = deal(surfacestructs);
+
+    layersetnames = cellstr(['layer_set_1']);
+    [layers_our(:).layer_set_name] = deal(layersetnames{:});
+
+    layersets = 1;
+    [layers_our(:).layer_set] = deal(layersets);
+
+    % initialize other fields with ones (these will be filled later)
+    [layers_our(:).vnormals] = deal(layersets);
+    [layers_our(:).cell_normals] = deal(layersets);
+    [layers_our(:).cell_origins] = deal(layersets);
+
+
+    % number of layers
+    depths = {layers_our.depth};
+    no_of_layers = size(depths,2);
+
+    % Get thickness of GM 
+    % start with the surface layer MeshROI_our.GrayMatter, and project downwards
+    % to each layer by finding the normals of triangular FEM elements
+
+    % get normals of each triangular surface element
+    TR = triangulation(MeshROI_our.surfaces.GrayMatter.faces,MeshROI_our.surfaces.GrayMatter.vertices);
+    V = faceNormal(TR);
+    V = -V; % making the normals point inwards
+
+    % find thickness of gray matter layer at each point by calculating the
+    % length of the normal until it meets the white matter surface
+    tri_midpoints = Tri_Midpoints(MeshROI_our.surfaces.GrayMatter.vertices,MeshROI_our.surfaces.GrayMatter.faces);
+    [distances,~] = point2trimesh(MeshROI_our.surfaces.WhiteMatter, 'QueryPoints', tri_midpoints);
+
+    % Create new layer meshes
+    for i = 1:no_of_layers
+        
+        % Project along normals to form layers with relative depths
+        
+        % Adjust the length of the unit vector to specific layer depths
+        % vectors = relative distance x total distance x unit vector and calculate 
+        % end points of the stretched vectors = points of the new layer mesh
+        
+        layer_vectors = layers_our(i).depth .* distances .* V;
+        layer_mesh_points = tri_midpoints + layer_vectors;
+        
+        % make mesh of new layer points
+        layers_our(i).surface.faces = MyCrustOpen(layer_mesh_points);
+        
+        layers_our(i).surface.vertices = layer_mesh_points;
+        
+        
+        % plot figures if wanted: later adds chosen elements in red
+        figure(i)
+        trisurf(layers_our(i).surface.faces,layer_mesh_points(:,1),layer_mesh_points(:,2),layer_mesh_points(:,3),'facecolor','c','edgecolor','b');
+        hold on;
+        
+        
+        if choose_elements
+            % Take 3000/2999 elements for each layer surface
+            % also perform rejection based on too large area of triangular element
+
+            numelements = layers_our(i).num_elem;
+
+            tris = layers_our(i).surface.faces;
+            % take indices of triangles randomly
+            randInds = randperm(length(tris),numelements);
+            randInds = randInds';
+
+            nodes = layers_our(i).surface.vertices;
+
+            % reject triangles with too large area or side length
+
+            % calculate areas of triangles represented by randinds
+            % area calculated with Heron's formula
+            area_threshold = 5;
+            side_threshold = 3;
+            for m = 1:length(randInds)
+                [area,maxside] = Tri_Area(randInds(m), tris, nodes);
+                while area > area_threshold || maxside > side_threshold
+                    % reject index and change to other
+                    randInds(m) = randperm(length(tris),1);
+                    [area,maxside] = Tri_Area(randInds(m), tris, nodes);
+                end
+                %areas(m) = area; % save areas for checking purposes
+                %sides(m) = maxside; % save maximu side lengths for checking purposes
+            end
+
+            % only keep triangles with these indices
+            tris = tris(randInds,:);
+
+            % delete nodes that are not in chosen triangles
+            % practically: keep all nodes that are in at least one triangle
+            tris2 = tris(:); % concatenate columns of triangle rows: get node indices
+            tris3= sort(tris2);
+            nodeInds = unique(tris3); % remove duplicate node indices (those shared between triangles)
+            nodes = layers_our(i).surface.vertices(nodeInds,:); % extract the nodes corresponding to said indices
+
+            % convert three points of triangles into MeshROI index system
+            ROItriangles2 = zeros(numelements,3);
+
+            for k = 1:size(tris,1)
+                for j = 1:3
+                    original_index = tris(k,j);
+                    point = layers_our(i).surface.vertices(original_index,:);
+                    [~,new_index,~] = intersect(nodes,point,'rows');
+                    ROItriangles2(k,j) = new_index;       
+                end
+            end
+
+            layers_our(i).surface.vertices = nodes;
+            layers_our(i).surface.faces = ROItriangles2;
+                   
+            % plot chosen elements in red if needed
+            figure(i)
+            trisurf(layers_our(i).surface.faces,nodes(:,1),nodes(:,2),nodes(:,3),'facecolor','r','edgecolor','k');
+         
+        else % write actual number of elements if no specific amount is chosen
+            faces_for_number = layers_our(i).surface.faces;
+            layers_our(i).num_elem = size(faces_for_number,1);
+        end
+
+
+        % Calculate vnormals, cell_normals and cell_origins
+
+        % calculate normals of each vertex
+        faces2double = layers_our(i).surface.faces;
+        TR = triangulation(double(faces2double), layers_our(i).surface.vertices);
+        layers_our(i).vnormals = vertexNormal(TR);
+
+        % calculate cell_normals of each projected element in each layer
+        % "the model neurons were oriented to align their
+        % somatodendritic axes with the element normals" - thus normals needed
+        layers_our(i).cell_normals = faceNormal(TR);
+        layers_our(i).cell_normals = (-1) * layers_our(i).cell_normals; % making the normals point inwards
+                        
+        % calculate cell_origins (apparently midpoints of elements?)
+        layers_our(i).cell_origins = Tri_Midpoints(layers_our(i).surface.vertices,layers_our(i).surface.faces);
+        
+        % Plot cell_normals
+%         figure(i)
+%         trisurf(layers_our(i).surface.faces,layer_mesh_points(:,1),layer_mesh_points(:,2),layer_mesh_points(:,3),'facecolor','c','edgecolor','b');
+%         hold on;
+%         
+%         P = layers_our(i).cell_origins;
+%         F = layers_our(i).cell_normals;
+%         quiver3(P(:,1),P(:,2),P(:,3), F(:,1),F(:,2),F(:,3),0.5,'color','r');
+    end
+end
+
+function layers_our = unifyNormalsLater(layers_our, B)
+    
+    % number of layers
+    depths = {layers_our.depth};
+    no_of_layers = size(depths,2);
+    
+    for i = 1:no_of_layers
+        % calculating dface vector with previously determined point B
+        dface = layers_our(i).cell_origins - B;
+
+        sdot = sign(dot(dface,layers_our(i).cell_normals,3));       
+        % ^ want these all to be positive
+        layers_our(i).cell_normals = layers_our(i).cell_normals.*sdot;
+        
+%         figure(i);
+%         nodes = layers_our(i).surface.vertices;
+%         trisurf(layers_our(i).surface.faces,nodes(:,1),nodes(:,2),nodes(:,3),'facecolor','c','edgecolor','k');
+%         % Plot cell_normals if needed
+%         hold on;         
+% 
+%         P = layers_our(i).cell_origins;
+%         F = layers_our(i).cell_normals;
+%         quiver3(P(:,1),P(:,2),P(:,3), F(:,1),F(:,2),F(:,3),0.5,'color','r');
+        
+    end
+end
