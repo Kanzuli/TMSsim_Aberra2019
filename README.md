@@ -1,12 +1,34 @@
 # README for Preprocessing
 
-Produces required inputs for TMS simulation by Aberra et al. 2019 (see below) from brain MRI and TMS coil orientation
+Produces required inputs for TMS simulation by Aberra et al. 2019 (see below) from brain MRI and TMS coil orientation.
+
+To run preprocessing pipeline:
+
+1) Create a head model from T1- and/or T2-weighted MRI using SimNIBS headreco or mri2mesh function (https://simnibs.github.io/simnibs/build/html/tutorial/head_meshing.html).
+    - `headreco all subject_1 <path to T1w>.nii.gz <path to T2w>.nii.gz` (creates folder `m2m_subject_1` and file `subject_1.msh`).
+    - Move folder `m2m_subject_1` and file `subject_1.msh` to `..\TMSsim_Aberra2019\mat\preprocessing\head_mesh\`.
+
+2) If you have the DTI and want to use anisotropic conductivies for GM and WM (https://simnibs.github.io/simnibs/build/html/documentation/command_line/dwi2cond.html).
+    - `dwi2cond --all --eddy --phasedir=-y --readout=0.05 subject_1 <path to DMRI>.nii.gz <path to DMRI>.bval <path to DMRI>.bvec <path to DMRI_reversed>.nii.gz`.
+    - Command can vary, but always use `subject_1` as ID. The command creates folder `d2c_subject_1`.
+    - Move folder `d2c_subject_1` to `..\TMSsim_Aberra2019\mat\preprocessing\head_mesh\`.
+
+3) Define desired TMS coil orientation as a transformation matrix (https://simnibs.github.io/simnibs/build/html/documentation/sim_struct/position.html?highlight=transformation%20matrix)
+    - Save 4x4 transformation_matrix in `..\TMSsim_Aberra2019\mat\preprocessing\transformation_matrix.mat`.
+    - This can be obtained from a TMS experiment from the nTMS software, or defined manually.
+    
+4) Run `..\TMSsim_Aberra2019\mat\preprocessing_main.m`.
+
+5) Continue with TMSsim_Aberra2019 instructions below.
 
 
-
-
-
-
+Authors: (firstname.lastname (at) aalto.fi)
+- Matilda Makkonen  - preprocessing
+- Joonas Laurinoja  - preprocessing
+- Oula Siljamo      - connectivity (netpyne)
+- Salla Saarinen    - preprocessing/figures
+- Filip Lewicki    
+- Sofia Tauriainen
 
 # README for TMSsim_Aberra2019
 
