@@ -5,3 +5,5 @@ mat/cell_data/*
 # NEURON-compiled files
 *.o
 *.c
+
+.DS_Store
