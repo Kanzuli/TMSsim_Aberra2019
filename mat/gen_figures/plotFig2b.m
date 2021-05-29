@@ -59,6 +59,7 @@ lwm = slices(end).slice_line;
 % plot line denoting gm boundary
 plot3(ax,lgm(:,1),lgm(:,2),lgm(:,3),'k','LineWidth',3);
 plot3(ax,lwm(:,1),lwm(:,2),lwm(:,3),'k','LineWidth',6);
+plot3(-28.13, -24.44, 58.12)
 if save_fig
    fig_name = 'Fig2b'; 
    fig_fold = fullfile(mat_dir,'figures');    
